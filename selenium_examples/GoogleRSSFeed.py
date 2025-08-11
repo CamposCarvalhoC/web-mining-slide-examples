@@ -2,6 +2,7 @@ from selenium import webdriver
 from bs4 import BeautifulSoup
 import argparse
 import pandas as pd
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from sklearn.decomposition import PCA
@@ -28,7 +29,7 @@ def get_rss_titles(theme):
 
     titles = []
     for title in soup.find_all('title'):
-        titles.append(title.text)
+        titles.append(title.text.split(' - ')[0])  # Remove the source part of the title
 
     driver.close()
     return titles[2:] # Skip Google's own titles
@@ -58,7 +59,7 @@ if __name__ == "__main__":
 
         print(f"Vectorizing titles...")
         vectorizer = TfidfVectorizer()
-        matrix = vectorizer.fit_transform(df['title'])
+        matrix = vectorizer.fit_transform(df['title'].str.lower())
 
         print(f"PCA + Kmeans clustering...")
         pca = PCA(n_components=2)
@@ -77,9 +78,23 @@ if __name__ == "__main__":
         remove_ticks_plot(axs[0])
         remove_ticks_plot(axs[1])
 
-        le = LabelEncoder()
-        true_labels_encoded = le.fit_transform(df['theme'])
-        mask_not_equal = true_labels_encoded != kmeans.labels_
+        # Map each cluster to the most common true theme inside it
+        cluster_to_theme = {}
+        clusters = kmeans.labels_
+        true_labels = df['theme'].values
+
+        for cluster_id in np.unique(clusters):
+            mask = (clusters == cluster_id)
+            true_themes_in_cluster = true_labels[mask]
+            if len(true_themes_in_cluster) == 0:
+                continue
+            most_common_theme = pd.Series(true_themes_in_cluster).mode()[0]
+            cluster_to_theme[cluster_id] = most_common_theme
+
+        predicted_themes = [cluster_to_theme[cluster] for cluster in clusters]
+
+        df['predicted_theme'] = predicted_themes
+        mask_not_equal = df['theme'] != df['predicted_theme']
 
         print(f"Mismatched labels (titles):")
         for group, df_theme in df[mask_not_equal].groupby("theme"):

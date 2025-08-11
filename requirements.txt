@@ -1,0 +1,11 @@
+beautifulsoup4
+selenium
+Scrapy
+numpy
+scikit-learn
+pandas
+scipy
+matplotlib
+seaborn
+PyQt6
+networkx[default]
